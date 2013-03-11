@@ -55,8 +55,9 @@ public class Views {
   private static final Map<Class<?>, Method> INJECTORS = new LinkedHashMap<Class<?>, Method>();
 
   /**
-   * Inject fields annotated with {@link InjectView} in the specified {@link Activity}. The current
-   * content view is used as the view root.
+   * Inject fields annotated with {@link InjectView} in the specified {@link Activity}. If an
+   * {@link InjectLayout} annotation is present on the activity, the referenced layout will be
+   * set and used. Otherwise, the existing content view is used.
    *
    * @param target Target activity for field injection.
    * @throws UnableToInjectException if injection could not be performed.
@@ -153,9 +154,11 @@ public class Views {
       Filer filer = processingEnv.getFiler();
 
       TypeMirror viewType = elementUtils.getTypeElement("android.view.View").asType();
+      TypeMirror activityType = elementUtils.getTypeElement("android.app.Activity").asType();
 
       Map<TypeElement, Set<InjectionPoint>> injectionsByClass =
           new LinkedHashMap<TypeElement, Set<InjectionPoint>>();
+      Map<Element, Integer> layoutsByClass = new LinkedHashMap<Element, Integer>();
       Set<TypeMirror> injectionTargets = new HashSet<TypeMirror>();
 
       for (Element element : env.getElementsAnnotatedWith(InjectView.class)) {
@@ -197,6 +200,26 @@ public class Views {
 
         // Add to the valid injection targets set.
         injectionTargets.add(enclosingElement.asType());
+
+        // Check for layout annotation.
+        InjectLayout injectLayout = enclosingElement.getAnnotation(InjectLayout.class);
+        if (injectLayout != null && !layoutsByClass.containsKey(enclosingElement)) {
+          if (!typeUtils.isSubtype(enclosingElement.asType(), activityType)) {
+            error(enclosingElement, "@InjectLayout class must extend from Activity (%s)",
+                enclosingElement.getQualifiedName());
+            continue;
+          }
+          int layoutResId = injectLayout.value();
+          layoutsByClass.put(enclosingElement, layoutResId);
+        }
+      }
+
+      // Check for layout injections on classes without field injections.
+      for (Element element : env.getElementsAnnotatedWith(InjectLayout.class)) {
+        if (!layoutsByClass.containsKey(element)) {
+          error(element, "@InjectLayout used on class without any @InjectView fields (%s).",
+              element);
+        }
       }
 
       for (Map.Entry<TypeElement, Set<InjectionPoint>> injection : injectionsByClass.entrySet()) {
@@ -209,7 +232,12 @@ public class Views {
             type.getQualifiedName().toString().substring(packageName.length() + 1).replace('.', '$')
                 + SUFFIX;
         String parentClass = resolveParentType(type, injectionTargets);
+        Integer layoutResId = layoutsByClass.get(type);
+
         StringBuilder injections = new StringBuilder();
+        if (layoutResId != null) {
+          injections.append(String.format(CONTENT_VIEW, layoutResId)).append('\n');
+        }
         if (parentClass != null) {
           injections.append(String.format(PARENT, parentClass)).append('\n');
         }
@@ -262,6 +290,7 @@ public class Views {
       }
     }
 
+    private static final String CONTENT_VIEW = "    target.setContentView(%s);";
     private static final String INJECTION = "    target.%s = finder.findById(source, %s);";
     private static final String PARENT = "    %s.inject(finder, target, source);";
     private static final String INJECTOR = ""

@@ -7,12 +7,14 @@ import android.widget.Button;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
+import butterknife.InjectLayout;
 import butterknife.InjectView;
 import butterknife.Views;
 
 import static android.view.View.OnClickListener;
 import static android.widget.Toast.LENGTH_SHORT;
 
+@InjectLayout(R.layout.simple_activity)
 public class SimpleActivity extends Activity {
   @InjectView(R.id.title) TextView title;
   @InjectView(R.id.subtitle) TextView subtitle;
@@ -22,7 +24,6 @@ public class SimpleActivity extends Activity {
 
   @Override protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
-    setContentView(R.layout.simple_activity);
     Views.inject(this);
 
     // Contrived code to use the "injected" views.
