@@ -60,10 +60,12 @@ public class Views {
    * content view is used as the view root.
    *
    * @param target Target activity for field injection.
+   * @return {@code target} object.
    * @throws UnableToInjectException if injection could not be performed.
    */
-  public static void inject(Activity target) {
+  public static <T extends Activity> T inject(T target) {
     inject(target, target, Finder.ACTIVITY);
+    return target;
   }
 
   /**
@@ -71,10 +73,12 @@ public class Views {
    * its children are used as the view root.
    *
    * @param target Target view for field injection.
+   * @return {@code target} object.
    * @throws UnableToInjectException if injection could not be performed.
    */
-  public static void inject(View target) {
+  public static <T extends View> T inject(T target) {
     inject(target, target, Finder.VIEW);
+    return target;
   }
 
   /**
@@ -83,10 +87,12 @@ public class Views {
    *
    * @param target Target class for field injection.
    * @param source Activity on which IDs will be looked up.
+   * @return {@code target} object.
    * @throws UnableToInjectException if injection could not be performed.
    */
-  public static void inject(Object target, Activity source) {
+  public static Object inject(Object target, Activity source) {
     inject(target, source, Finder.ACTIVITY);
+    return target;
   }
 
   /**
@@ -95,10 +101,12 @@ public class Views {
    *
    * @param target Target class for field injection.
    * @param source View root on which IDs will be looked up.
+   * @return {@code target} object.
    * @throws UnableToInjectException if injection could not be performed.
    */
-  public static void inject(Object target, View source) {
+  public static Object inject(Object target, View source) {
     inject(target, source, Finder.VIEW);
+    return target;
   }
 
   /**
@@ -107,9 +115,10 @@ public class Views {
    * This should only be used in the {@code onDestroyView} method of a fragment in practice.
    *
    * @param target Target class for field reset.
+   * @return {@code target} object.
    * @throws UnableToResetException if views could not be reset.
    */
-  public static void reset(Object target) {
+  public static Object reset(Object target) {
     Class<?> targetClass = target.getClass();
     try {
       Method reset = findResettersForClass(targetClass);
@@ -121,6 +130,7 @@ public class Views {
     } catch (Exception e) {
       throw new UnableToResetException("Unable to reset views for " + target, e);
     }
+    return target;
   }
 
   static void inject(Object target, Object source, Finder finder) {
