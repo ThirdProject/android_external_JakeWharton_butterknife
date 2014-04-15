@@ -12,7 +12,7 @@ import static com.google.testing.compile.JavaSourceSubjectFactory.javaSource;
 import static org.truth0.Truth.ASSERT;
 
 public class OnClickTest {
-  @Test public void onClickInjection() {
+  @Test public void onClickMethodInjection() {
     JavaFileObject source = JavaFileObjects.forSourceString("test.Test", Joiner.on('\n').join(
         "package test;",
         "import android.app.Activity;",
@@ -48,7 +48,43 @@ public class OnClickTest {
         .generatesSources(expectedSource);
   }
 
-  @Test public void findOnlyCalledOnce() {
+  @Test public void onClickFieldInjection() {
+    JavaFileObject source = JavaFileObjects.forSourceString("test.Test", Joiner.on('\n').join(
+        "package test;",
+        "import android.app.Activity;",
+        "import android.view.View;",
+        "import butterknife.OnClick;",
+        "public class Test extends Activity {",
+        "  @OnClick(1)",
+        "  final View.OnClickListener clickListener = new View.OnClickListener() {",
+        "    @Override public void onClick(View view) {}",
+        "  };",
+        "}"));
+
+    JavaFileObject expectedSource = JavaFileObjects.forSourceString("test/Test$$ViewInjector",
+        Joiner.on('\n').join(
+            "package test;",
+            "import android.view.View;",
+            "import butterknife.ButterKnife.Finder;",
+            "public class Test$$ViewInjector {",
+            "  public static void inject(Finder finder, final test.Test target, Object source) {",
+            "    View view;",
+            "    view = finder.findRequiredView(source, 1, \"method 'doStuff'\");",
+            "    view.setOnClickListener(target.clickListener);",
+            "  }",
+            "  public static void reset(test.Test target) {",
+            "  }",
+            "}"
+        ));
+
+    ASSERT.about(javaSource()).that(source)
+        .processedWith(butterknifeProcessors())
+        .compilesWithoutError()
+        .and()
+        .generatesSources(expectedSource);
+  }
+
+  @Test public void findOnlyCalledOnceForMethod() {
     JavaFileObject source = JavaFileObjects.forSourceString("test.Test", Joiner.on('\n').join(
         "package test;",
         "import android.app.Activity;",
@@ -75,6 +111,46 @@ public class OnClickTest {
             "        target.doStuff();",
             "      }",
             "    });",
+            "  }",
+            "  public static void reset(test.Test target) {",
+            "    target.view = null;",
+            "  }",
+            "}"
+        ));
+
+    ASSERT.about(javaSource()).that(source)
+        .processedWith(butterknifeProcessors())
+        .compilesWithoutError()
+        .and()
+        .generatesSources(expectedSource);
+  }
+
+  @Test public void findOnlyCalledOnceForField() {
+    JavaFileObject source = JavaFileObjects.forSourceString("test.Test", Joiner.on('\n').join(
+        "package test;",
+        "import android.app.Activity;",
+        "import android.view.View;",
+        "import butterknife.InjectView;",
+        "import butterknife.OnClick;",
+        "public class Test extends Activity {",
+        "  @InjectView(1) View view;",
+        "  @OnClick(1)",
+        "  final View.OnClickListener clickListener = new View.OnClickListener() {",
+        "    @Override public void onClick(View view) {}",
+        "  };",
+        "}"));
+
+    JavaFileObject expectedSource = JavaFileObjects.forSourceString("test/Test$$ViewInjector",
+        Joiner.on('\n').join(
+            "package test;",
+            "import android.view.View;",
+            "import butterknife.ButterKnife.Finder;",
+            "public class Test$$ViewInjector {",
+            "  public static void inject(Finder finder, final test.Test target, Object source) {",
+            "    View view;",
+            "    view = finder.findRequiredView(source, 1, \"field 'view' and method 'doStuff'\");",
+            "    target.view = view;",
+            "    view.setOnClickListener(target.clickListener);",
             "  }",
             "  public static void reset(test.Test target) {",
             "    target.view = null;",
@@ -337,7 +413,28 @@ public class OnClickTest {
         .in(source).onLine(6);
   }
 
-  @Test public void failsIfStatic() {
+  @Test public void failsIfPrivateField() {
+    JavaFileObject source = JavaFileObjects.forSourceString("test.Test", Joiner.on('\n').join(
+        "package test;",
+        "import android.app.Activity;",
+        "import android.view.View;",
+        "import butterknife.OnClick;",
+        "public class Test extends Activity {",
+        "  @OnClick(1)",
+        "  private final View.OnClickListener clickListener = new View.OnClickListener() {",
+        "    @Override public void onClick(View view) {}",
+        "  };",
+        "}"));
+
+    ASSERT.about(javaSource()).that(source)
+        .processedWith(butterknifeProcessors())
+        .failsToCompile()
+        .withErrorContaining(
+            "@OnClick fields must not be private or static. (test.Test.clickListener)")
+        .in(source).onLine(6);
+  }
+
+  @Test public void failsIfStaticMethod() {
     JavaFileObject source = JavaFileObjects.forSourceString("test.Test", Joiner.on('\n').join(
         "package test;",
         "import android.app.Activity;",
@@ -352,6 +449,27 @@ public class OnClickTest {
         .processedWith(butterknifeProcessors())
         .failsToCompile()
         .withErrorContaining("@OnClick methods must not be private or static. (test.Test.doStuff)")
+        .in(source).onLine(6);
+  }
+
+  @Test public void failsIfStaticField() {
+    JavaFileObject source = JavaFileObjects.forSourceString("test.Test", Joiner.on('\n').join(
+        "package test;",
+        "import android.app.Activity;",
+        "import android.view.View;",
+        "import butterknife.OnClick;",
+        "public class Test extends Activity {",
+        "  @OnClick(1)",
+        "  static final View.OnClickListener clickListener = new View.OnClickListener() {",
+        "    @Override public void onClick(View view) {}",
+        "  };",
+        "}"));
+
+    ASSERT.about(javaSource()).that(source)
+        .processedWith(butterknifeProcessors())
+        .failsToCompile()
+        .withErrorContaining(
+            "@OnClick fields must not be private or static. (test.Test.clickListener)")
         .in(source).onLine(6);
   }
 

@@ -5,6 +5,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
 import static android.view.View.OnClickListener;
+import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.RetentionPolicy.CLASS;
 
@@ -21,7 +22,7 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
  * @see OnClickListener
  * @see Optional
  */
-@Retention(CLASS) @Target(METHOD)
+@Retention(CLASS) @Target({ METHOD, FIELD })
 @ListenerClass(
     targetType = "android.view.View",
     setter = "setOnClickListener",
