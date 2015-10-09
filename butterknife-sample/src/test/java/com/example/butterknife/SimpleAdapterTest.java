@@ -8,11 +8,13 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 
 import static com.example.butterknife.SimpleAdapter.ViewHolder;
 import static org.fest.assertions.api.ANDROID.assertThat;
 
-@RunWith(RobolectricTestRunner.class)
+@RunWith(RobolectricTestRunner.class) //
+@Config(manifest = "src/main/AndroidManifest.xml")
 public class SimpleAdapterTest {
   @Test public void verifyViewHolderViews() {
     Context context = Robolectric.application;
@@ -24,7 +26,7 @@ public class SimpleAdapterTest {
     assertThat(holder.length).hasId(R.id.length);
     assertThat(holder.position).hasId(R.id.position);
 
-    ButterKnife.reset(holder);
+    ButterKnife.unbind(holder);
     assertThat(holder.word).isNull();
     assertThat(holder.length).isNull();
     assertThat(holder.position).isNull();

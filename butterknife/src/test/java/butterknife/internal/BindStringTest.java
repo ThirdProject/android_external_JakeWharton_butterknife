@@ -2,39 +2,33 @@ package butterknife.internal;
 
 import com.google.common.base.Joiner;
 import com.google.testing.compile.JavaFileObjects;
-import org.junit.Test;
-
 import javax.tools.JavaFileObject;
+import org.junit.Test;
 
 import static com.google.common.truth.Truth.ASSERT;
 import static com.google.testing.compile.JavaSourceSubjectFactory.javaSource;
 
-public class OnTouchTest {
-  @Test public void touch() {
+public class BindStringTest {
+  @Test public void simple() {
     JavaFileObject source = JavaFileObjects.forSourceString("test.Test", Joiner.on('\n').join(
         "package test;",
         "import android.app.Activity;",
-        "import butterknife.OnTouch;",
+        "import butterknife.BindString;",
         "public class Test extends Activity {",
-        "  @OnTouch(1) boolean doStuff() { return false; }",
+        "  @BindString(1) String one;",
         "}"
     ));
 
     JavaFileObject expectedSource = JavaFileObjects.forSourceString("test/Test$$ViewBinder",
         Joiner.on('\n').join(
             "package test;",
-            "import android.view.View;",
+            "import android.content.res.Resources;",
             "import butterknife.ButterKnife.Finder;",
             "import butterknife.ButterKnife.ViewBinder;",
             "public class Test$$ViewBinder<T extends test.Test> implements ViewBinder<T> {",
             "  @Override public void bind(final Finder finder, final T target, Object source) {",
-            "    View view;",
-            "    view = finder.findRequiredView(source, 1, \"method 'doStuff'\");",
-            "    view.setOnTouchListener(new android.view.View.OnTouchListener() {",
-            "      @Override public boolean onTouch(android.view.View p0, android.view.MotionEvent p1) {",
-            "        return target.doStuff();",
-            "      }",
-            "    });",
+            "    Resources res = finder.getContext(source).getResources();",
+            "    target.one = res.getString(1);",
             "  }",
             "  @Override public void unbind(T target) {",
             "  }",
@@ -48,21 +42,20 @@ public class OnTouchTest {
         .generatesSources(expectedSource);
   }
 
-  @Test public void failsMultipleListenersWithReturnValue() throws Exception {
+  @Test public void typeMustBeString() {
     JavaFileObject source = JavaFileObjects.forSourceString("test.Test", Joiner.on('\n').join(
         "package test;",
         "import android.app.Activity;",
-        "import butterknife.OnTouch;",
+        "import butterknife.BindString;",
         "public class Test extends Activity {",
-        "  @OnTouch(1) boolean doStuff1() {}",
-        "  @OnTouch(1) boolean doStuff2() {}",
-        "}"));
+        "  @BindString(1) boolean one;",
+        "}"
+    ));
 
     ASSERT.about(javaSource()).that(source)
         .processedWith(new ButterKnifeProcessor())
         .failsToCompile()
-        .withErrorContaining(
-            "Multiple listener methods with return value specified for ID 1. (test.Test.doStuff2)")
-        .in(source).onLine(6);
+        .withErrorContaining("@BindString field type must be 'String'. (test.Test.one)")
+        .in(source).onLine(5);
   }
 }

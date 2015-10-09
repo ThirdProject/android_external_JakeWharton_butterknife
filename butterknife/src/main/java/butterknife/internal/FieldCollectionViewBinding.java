@@ -1,6 +1,6 @@
 package butterknife.internal;
 
-final class CollectionBinding implements Binding {
+final class FieldCollectionViewBinding implements ViewBinding {
   enum Kind {
     ARRAY,
     LIST
@@ -11,7 +11,7 @@ final class CollectionBinding implements Binding {
   private final Kind kind;
   private final boolean required;
 
-  CollectionBinding(String name, String type, Kind kind, boolean required) {
+  FieldCollectionViewBinding(String name, String type, Kind kind, boolean required) {
     this.name = name;
     this.type = type;
     this.kind = kind;

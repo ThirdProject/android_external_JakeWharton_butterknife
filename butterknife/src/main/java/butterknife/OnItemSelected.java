@@ -1,5 +1,6 @@
 package butterknife;
 
+import android.view.View;
 import butterknife.internal.ListenerClass;
 import butterknife.internal.ListenerMethod;
 import java.lang.annotation.Retention;
@@ -14,7 +15,7 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
  * ID specified.
  * <pre><code>
  * {@literal @}OnItemSelected(R.id.example_list) void onItemSelected(int position) {
- *   Toast.makeText(this, "Selected position " + position + "!", LENGTH_SHORT).show();
+ *   Toast.makeText(this, "Selected position " + position + "!", Toast.LENGTH_SHORT).show();
  * }
  * </code></pre>
  * Any number of parameters from
@@ -25,12 +26,11 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
  * <pre><code>
  * {@literal @}OnItemSelected(value = R.id.example_list, callback = NOTHING_SELECTED)
  * void onNothingSelected() {
- *   Toast.makeText(this, "Nothing selected!", LENGTH_SHORT).show();
+ *   Toast.makeText(this, "Nothing selected!", Toast.LENGTH_SHORT).show();
  * }
  * </code></pre>
  *
  * @see OnItemSelectedListener
- * @see Optional
  */
 @Target(METHOD)
 @Retention(CLASS)
@@ -42,7 +42,7 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
 )
 public @interface OnItemSelected {
   /** View IDs to which the method will be bound. */
-  int[] value();
+  int[] value() default { View.NO_ID };
 
   /** Listener callback to which the method will be bound. */
   Callback callback() default Callback.ITEM_SELECTED;

@@ -1,5 +1,6 @@
 package butterknife;
 
+import android.view.View;
 import butterknife.internal.ListenerClass;
 import butterknife.internal.ListenerMethod;
 import java.lang.annotation.Retention;
@@ -14,7 +15,7 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
  * ID specified.
  * <pre><code>
  * {@literal @}OnItemLongClick(R.id.example_list) boolean onItemLongClick(int position) {
- *   Toast.makeText(this, "Long clicked position " + position + "!", LENGTH_SHORT).show();
+ *   Toast.makeText(this, "Long clicked position " + position + "!", Toast.LENGTH_SHORT).show();
  *   return true;
  * }
  * </code></pre>
@@ -23,7 +24,6 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
  * int, long) onItemLongClick} may be used on the method.
  *
  * @see OnItemLongClickListener
- * @see Optional
  */
 @Target(METHOD)
 @Retention(CLASS)
@@ -45,5 +45,5 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
 )
 public @interface OnItemLongClick {
   /** View IDs to which the method will be bound. */
-  int[] value();
+  int[] value() default { View.NO_ID };
 }

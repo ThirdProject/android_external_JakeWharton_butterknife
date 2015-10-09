@@ -1,5 +1,6 @@
 package butterknife;
 
+import android.view.View;
 import butterknife.internal.ListenerClass;
 import butterknife.internal.ListenerMethod;
 import java.lang.annotation.Retention;
@@ -14,7 +15,7 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
  * ID specified.
  * <pre><code>
  * {@literal @}OnEditorAction(R.id.example) boolean onEditorAction(KeyEvent key) {
- *   Toast.makeText(this, "Pressed: " + key, LENGTH_SHORT).show();
+ *   Toast.makeText(this, "Pressed: " + key, Toast.LENGTH_SHORT).show();
  *   return true;
  * }
  * </code></pre>
@@ -23,7 +24,6 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
  * onEditorAction} may be used on the method.
  *
  * @see OnEditorActionListener
- * @see Optional
  */
 @Target(METHOD)
 @Retention(CLASS)
@@ -44,5 +44,5 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
 )
 public @interface OnEditorAction {
   /** View IDs to which the method will be bound. */
-  int[] value();
+  int[] value() default { View.NO_ID };
 }

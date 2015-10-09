@@ -1,7 +1,13 @@
 package butterknife.internal;
 
-import butterknife.InjectView;
-import butterknife.InjectViews;
+import android.view.View;
+import butterknife.Bind;
+import butterknife.BindBool;
+import butterknife.BindColor;
+import butterknife.BindDimen;
+import butterknife.BindDrawable;
+import butterknife.BindInt;
+import butterknife.BindString;
 import butterknife.OnCheckedChanged;
 import butterknife.OnClick;
 import butterknife.OnEditorAction;
@@ -13,7 +19,6 @@ import butterknife.OnLongClick;
 import butterknife.OnPageChange;
 import butterknife.OnTextChanged;
 import butterknife.OnTouch;
-import butterknife.Optional;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -23,6 +28,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,6 +39,7 @@ import javax.annotation.processing.Filer;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
+import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
@@ -48,14 +55,21 @@ import javax.lang.model.util.Types;
 import javax.tools.JavaFileObject;
 
 import static javax.lang.model.element.ElementKind.CLASS;
+import static javax.lang.model.element.ElementKind.INTERFACE;
 import static javax.lang.model.element.ElementKind.METHOD;
 import static javax.lang.model.element.Modifier.PRIVATE;
 import static javax.lang.model.element.Modifier.STATIC;
 import static javax.tools.Diagnostic.Kind.ERROR;
 
 public final class ButterKnifeProcessor extends AbstractProcessor {
-  public static final String SUFFIX = "$$ViewInjector";
+  public static final String SUFFIX = "$$ViewBinder";
+  public static final String ANDROID_PREFIX = "android.";
+  public static final String JAVA_PREFIX = "java.";
   static final String VIEW_TYPE = "android.view.View";
+  private static final String COLOR_STATE_LIST_TYPE = "android.content.res.ColorStateList";
+  private static final String DRAWABLE_TYPE = "android.graphics.drawable.Drawable";
+  private static final String NULLABLE_ANNOTATION_NAME = "Nullable";
+  private static final String ITERABLE_TYPE = "java.lang.Iterable<?>";
   private static final String LIST_TYPE = List.class.getCanonicalName();
   private static final List<Class<? extends Annotation>> LISTENERS = Arrays.asList(//
       OnCheckedChanged.class, //
@@ -84,62 +98,56 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
   }
 
   @Override public Set<String> getSupportedAnnotationTypes() {
-    Set<String> supportTypes = new LinkedHashSet<String>();
-    supportTypes.add(InjectView.class.getCanonicalName());
-    supportTypes.add(InjectViews.class.getCanonicalName());
+    Set<String> types = new LinkedHashSet<String>();
+
+    types.add(Bind.class.getCanonicalName());
+
     for (Class<? extends Annotation> listener : LISTENERS) {
-      supportTypes.add(listener.getCanonicalName());
+      types.add(listener.getCanonicalName());
     }
 
-    return supportTypes;
+    types.add(BindBool.class.getCanonicalName());
+    types.add(BindColor.class.getCanonicalName());
+    types.add(BindDimen.class.getCanonicalName());
+    types.add(BindDrawable.class.getCanonicalName());
+    types.add(BindInt.class.getCanonicalName());
+    types.add(BindString.class.getCanonicalName());
+
+    return types;
   }
 
   @Override public boolean process(Set<? extends TypeElement> elements, RoundEnvironment env) {
-    Map<TypeElement, ViewInjector> targetClassMap = findAndParseTargets(env);
+    Map<TypeElement, BindingClass> targetClassMap = findAndParseTargets(env);
 
-    for (Map.Entry<TypeElement, ViewInjector> entry : targetClassMap.entrySet()) {
+    for (Map.Entry<TypeElement, BindingClass> entry : targetClassMap.entrySet()) {
       TypeElement typeElement = entry.getKey();
-      ViewInjector viewInjector = entry.getValue();
+      BindingClass bindingClass = entry.getValue();
 
       try {
-        JavaFileObject jfo = filer.createSourceFile(viewInjector.getFqcn(), typeElement);
+        JavaFileObject jfo = filer.createSourceFile(bindingClass.getFqcn(), typeElement);
         Writer writer = jfo.openWriter();
-        writer.write(viewInjector.brewJava());
+        writer.write(bindingClass.brewJava());
         writer.flush();
         writer.close();
       } catch (IOException e) {
-        error(typeElement, "Unable to write injector for type %s: %s", typeElement, e.getMessage());
+        error(typeElement, "Unable to write view binder for type %s: %s", typeElement,
+            e.getMessage());
       }
     }
 
     return true;
   }
 
-  private Map<TypeElement, ViewInjector> findAndParseTargets(RoundEnvironment env) {
-    Map<TypeElement, ViewInjector> targetClassMap = new LinkedHashMap<TypeElement, ViewInjector>();
+  private Map<TypeElement, BindingClass> findAndParseTargets(RoundEnvironment env) {
+    Map<TypeElement, BindingClass> targetClassMap = new LinkedHashMap<TypeElement, BindingClass>();
     Set<String> erasedTargetNames = new LinkedHashSet<String>();
 
-    // Process each @InjectView element.
-    for (Element element : env.getElementsAnnotatedWith(InjectView.class)) {
+    // Process each @Bind element.
+    for (Element element : env.getElementsAnnotatedWith(Bind.class)) {
       try {
-        parseInjectView(element, targetClassMap, erasedTargetNames);
+        parseBind(element, targetClassMap, erasedTargetNames);
       } catch (Exception e) {
-        StringWriter stackTrace = new StringWriter();
-        e.printStackTrace(new PrintWriter(stackTrace));
-
-        error(element, "Unable to generate view injector for @InjectView.\n\n%s", stackTrace);
-      }
-    }
-
-    // Process each @InjectViews element.
-    for (Element element : env.getElementsAnnotatedWith(InjectViews.class)) {
-      try {
-        parseInjectViews(element, targetClassMap, erasedTargetNames);
-      } catch (Exception e) {
-        StringWriter stackTrace = new StringWriter();
-        e.printStackTrace(new PrintWriter(stackTrace));
-
-        error(element, "Unable to generate view injector for @InjectViews.\n\n%s", stackTrace);
+        logParsingError(element, Bind.class, e);
       }
     }
 
@@ -148,18 +156,79 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
       findAndParseListener(env, listener, targetClassMap, erasedTargetNames);
     }
 
-    // Try to find a parent injector for each injector.
-    for (Map.Entry<TypeElement, ViewInjector> entry : targetClassMap.entrySet()) {
+    // Process each @BindBool element.
+    for (Element element : env.getElementsAnnotatedWith(BindBool.class)) {
+      try {
+        parseResourceBool(element, targetClassMap, erasedTargetNames);
+      } catch (Exception e) {
+        logParsingError(element, BindBool.class, e);
+      }
+    }
+
+    // Process each @BindColor element.
+    for (Element element : env.getElementsAnnotatedWith(BindColor.class)) {
+      try {
+        parseResourceColor(element, targetClassMap, erasedTargetNames);
+      } catch (Exception e) {
+        logParsingError(element, BindColor.class, e);
+      }
+    }
+
+    // Process each @BindDimen element.
+    for (Element element : env.getElementsAnnotatedWith(BindDimen.class)) {
+      try {
+        parseResourceDimen(element, targetClassMap, erasedTargetNames);
+      } catch (Exception e) {
+        logParsingError(element, BindDimen.class, e);
+      }
+    }
+
+    // Process each @BindDrawable element.
+    for (Element element : env.getElementsAnnotatedWith(BindDrawable.class)) {
+      try {
+        parseResourceDrawable(element, targetClassMap, erasedTargetNames);
+      } catch (Exception e) {
+        logParsingError(element, BindDrawable.class, e);
+      }
+    }
+
+    // Process each @BindInt element.
+    for (Element element : env.getElementsAnnotatedWith(BindInt.class)) {
+      try {
+        parseResourceInt(element, targetClassMap, erasedTargetNames);
+      } catch (Exception e) {
+        logParsingError(element, BindInt.class, e);
+      }
+    }
+
+    // Process each @BindString element.
+    for (Element element : env.getElementsAnnotatedWith(BindString.class)) {
+      try {
+        parseResourceString(element, targetClassMap, erasedTargetNames);
+      } catch (Exception e) {
+        logParsingError(element, BindString.class, e);
+      }
+    }
+
+    // Try to find a parent binder for each.
+    for (Map.Entry<TypeElement, BindingClass> entry : targetClassMap.entrySet()) {
       String parentClassFqcn = findParentFqcn(entry.getKey(), erasedTargetNames);
       if (parentClassFqcn != null) {
-        entry.getValue().setParentInjector(parentClassFqcn + SUFFIX);
+        entry.getValue().setParentViewBinder(parentClassFqcn + SUFFIX);
       }
     }
 
     return targetClassMap;
   }
 
-  private boolean isValidForGeneratedCode(Class<? extends Annotation> annotationClass,
+  private void logParsingError(Element element, Class<? extends Annotation> annotation,
+      Exception e) {
+    StringWriter stackTrace = new StringWriter();
+    e.printStackTrace(new PrintWriter(stackTrace));
+    error(element, "Unable to parse @%s binding.\n\n%s", annotation.getSimpleName(), stackTrace);
+  }
+
+  private boolean isInaccessibleViaGeneratedCode(Class<? extends Annotation> annotationClass,
       String targetThing, Element element) {
     boolean hasError = false;
     TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
@@ -192,30 +261,70 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
     return hasError;
   }
 
-  private void parseInjectView(Element element, Map<TypeElement, ViewInjector> targetClassMap,
+  private boolean isBindingInWrongPackage(Class<? extends Annotation> annotationClass,
+      Element element) {
+    TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
+    String qualifiedName = enclosingElement.getQualifiedName().toString();
+
+    if (qualifiedName.startsWith(ANDROID_PREFIX)) {
+      error(element, "@%s-annotated class incorrectly in Android framework package. (%s)",
+          annotationClass.getSimpleName(), qualifiedName);
+      return true;
+    }
+    if (qualifiedName.startsWith(JAVA_PREFIX)) {
+      error(element, "@%s-annotated class incorrectly in Java framework package. (%s)",
+          annotationClass.getSimpleName(), qualifiedName);
+      return true;
+    }
+
+    return false;
+  }
+
+  private void parseBind(Element element, Map<TypeElement, BindingClass> targetClassMap,
+      Set<String> erasedTargetNames) {
+    // Verify common generated code restrictions.
+    if (isInaccessibleViaGeneratedCode(Bind.class, "fields", element)
+        || isBindingInWrongPackage(Bind.class, element)) {
+      return;
+    }
+
+    TypeMirror elementType = element.asType();
+    if (elementType.getKind() == TypeKind.ARRAY) {
+      parseBindMany(element, targetClassMap, erasedTargetNames);
+    } else if (LIST_TYPE.equals(doubleErasure(elementType))) {
+      parseBindMany(element, targetClassMap, erasedTargetNames);
+    } else if (isSubtypeOfType(elementType, ITERABLE_TYPE)) {
+      error(element, "@%s must be a List or array. (%s.%s)", Bind.class.getSimpleName(),
+          ((TypeElement) element.getEnclosingElement()).getQualifiedName(),
+          element.getSimpleName());
+    } else {
+      parseBindOne(element, targetClassMap, erasedTargetNames);
+    }
+  }
+
+  private void parseBindOne(Element element, Map<TypeElement, BindingClass> targetClassMap,
       Set<String> erasedTargetNames) {
     boolean hasError = false;
     TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
 
     // Verify that the target type extends from View.
     TypeMirror elementType = element.asType();
-    if (elementType instanceof TypeVariable) {
+    if (elementType.getKind() == TypeKind.TYPEVAR) {
       TypeVariable typeVariable = (TypeVariable) elementType;
       elementType = typeVariable.getUpperBound();
     }
-    if (!isSubtypeOfType(elementType, VIEW_TYPE)) {
-      error(element, "@InjectView fields must extend from View. (%s.%s)",
-          enclosingElement.getQualifiedName(), element.getSimpleName());
+    if (!isSubtypeOfType(elementType, VIEW_TYPE) && !isInterface(elementType)) {
+      error(element, "@%s fields must extend from View or be an interface. (%s.%s)",
+          Bind.class.getSimpleName(), enclosingElement.getQualifiedName(), element.getSimpleName());
       hasError = true;
     }
 
-    // Verify common generated code restrictions.
-    hasError |= isValidForGeneratedCode(InjectView.class, "fields", element);
-
-    // Check for the other field annotation.
-    if (element.getAnnotation(InjectViews.class) != null) {
-      error(element, "Only one of @InjectView and @InjectViews is allowed. (%s.%s)",
-          enclosingElement.getQualifiedName(), element.getSimpleName());
+    // Assemble information on the field.
+    int[] ids = element.getAnnotation(Bind.class).value();
+    if (ids.length != 1) {
+      error(element, "@%s for a view must only specify one ID. Found: %s. (%s.%s)",
+          Bind.class.getSimpleName(), Arrays.toString(ids), enclosingElement.getQualifiedName(),
+          element.getSimpleName());
       hasError = true;
     }
 
@@ -223,21 +332,36 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
       return;
     }
 
-    // Assemble information on the injection point.
+    int id = ids[0];
+    BindingClass bindingClass = targetClassMap.get(enclosingElement);
+    if (bindingClass != null) {
+      ViewBindings viewBindings = bindingClass.getViewBinding(id);
+      if (viewBindings != null) {
+        Iterator<FieldViewBinding> iterator = viewBindings.getFieldBindings().iterator();
+        if (iterator.hasNext()) {
+          FieldViewBinding existingBinding = iterator.next();
+          error(element, "Attempt to use @%s for an already bound ID %d on '%s'. (%s.%s)",
+              Bind.class.getSimpleName(), id, existingBinding.getName(),
+              enclosingElement.getQualifiedName(), element.getSimpleName());
+          return;
+        }
+      }
+    } else {
+      bindingClass = getOrCreateTargetClass(targetClassMap, enclosingElement);
+    }
+
     String name = element.getSimpleName().toString();
-    int id = element.getAnnotation(InjectView.class).value();
     String type = elementType.toString();
-    boolean required = element.getAnnotation(Optional.class) == null;
+    boolean required = isRequiredBinding(element);
 
-    ViewInjector viewInjector = getOrCreateTargetClass(targetClassMap, enclosingElement);
-    ViewBinding binding = new ViewBinding(name, type, required);
-    viewInjector.addView(id, binding);
+    FieldViewBinding binding = new FieldViewBinding(name, type, required);
+    bindingClass.addField(id, binding);
 
-    // Add the type-erased version to the valid injection targets set.
+    // Add the type-erased version to the valid binding targets set.
     erasedTargetNames.add(enclosingElement.toString());
   }
 
-  private void parseInjectViews(Element element, Map<TypeElement, ViewInjector> targetClassMap,
+  private void parseBindMany(Element element, Map<TypeElement, BindingClass> targetClassMap,
       Set<String> erasedTargetNames) {
     boolean hasError = false;
     TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
@@ -246,64 +370,280 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
     TypeMirror elementType = element.asType();
     String erasedType = doubleErasure(elementType);
     TypeMirror viewType = null;
-    CollectionBinding.Kind kind = null;
+    FieldCollectionViewBinding.Kind kind = null;
     if (elementType.getKind() == TypeKind.ARRAY) {
       ArrayType arrayType = (ArrayType) elementType;
       viewType = arrayType.getComponentType();
-      kind = CollectionBinding.Kind.ARRAY;
+      kind = FieldCollectionViewBinding.Kind.ARRAY;
     } else if (LIST_TYPE.equals(erasedType)) {
       DeclaredType declaredType = (DeclaredType) elementType;
       List<? extends TypeMirror> typeArguments = declaredType.getTypeArguments();
       if (typeArguments.size() != 1) {
-        error(element, "@InjectViews List must have a generic component. (%s.%s)",
-            enclosingElement.getQualifiedName(), element.getSimpleName());
+        error(element, "@%s List must have a generic component. (%s.%s)",
+            Bind.class.getSimpleName(), enclosingElement.getQualifiedName(),
+            element.getSimpleName());
         hasError = true;
       } else {
         viewType = typeArguments.get(0);
       }
-      kind = CollectionBinding.Kind.LIST;
+      kind = FieldCollectionViewBinding.Kind.LIST;
     } else {
-      error(element, "@InjectViews must be a List or array. (%s.%s)",
-          enclosingElement.getQualifiedName(), element.getSimpleName());
-      hasError = true;
+      throw new AssertionError();
     }
-    if (viewType instanceof TypeVariable) {
+    if (viewType != null && viewType.getKind() == TypeKind.TYPEVAR) {
       TypeVariable typeVariable = (TypeVariable) viewType;
       viewType = typeVariable.getUpperBound();
     }
 
     // Verify that the target type extends from View.
-    if (viewType != null && !isSubtypeOfType(viewType, VIEW_TYPE)) {
-      error(element, "@InjectViews type must extend from View. (%s.%s)",
-          enclosingElement.getQualifiedName(), element.getSimpleName());
+    if (viewType != null && !isSubtypeOfType(viewType, VIEW_TYPE) && !isInterface(viewType)) {
+      error(element, "@%s List or array type must extend from View or be an interface. (%s.%s)",
+          Bind.class.getSimpleName(), enclosingElement.getQualifiedName(), element.getSimpleName());
       hasError = true;
     }
-
-    // Verify common generated code restrictions.
-    hasError |= isValidForGeneratedCode(InjectViews.class, "fields", element);
 
     if (hasError) {
       return;
     }
 
-    // Assemble information on the injection point.
+    // Assemble information on the field.
     String name = element.getSimpleName().toString();
-    int[] ids = element.getAnnotation(InjectViews.class).value();
+    int[] ids = element.getAnnotation(Bind.class).value();
     if (ids.length == 0) {
-      error(element, "@InjectViews must specify at least one ID. (%s.%s)",
+      error(element, "@%s must specify at least one ID. (%s.%s)", Bind.class.getSimpleName(),
           enclosingElement.getQualifiedName(), element.getSimpleName());
       return;
     }
 
+    Integer duplicateId = findDuplicate(ids);
+    if (duplicateId != null) {
+      error(element, "@%s annotation contains duplicate ID %d. (%s.%s)", Bind.class.getSimpleName(),
+          duplicateId, enclosingElement.getQualifiedName(), element.getSimpleName());
+    }
+
     assert viewType != null; // Always false as hasError would have been true.
     String type = viewType.toString();
-    boolean required = element.getAnnotation(Optional.class) == null;
+    boolean required = isRequiredBinding(element);
 
-    ViewInjector viewInjector = getOrCreateTargetClass(targetClassMap, enclosingElement);
-    CollectionBinding binding = new CollectionBinding(name, type, kind, required);
-    viewInjector.addCollection(ids, binding);
+    BindingClass bindingClass = getOrCreateTargetClass(targetClassMap, enclosingElement);
+    FieldCollectionViewBinding binding = new FieldCollectionViewBinding(name, type, kind, required);
+    bindingClass.addFieldCollection(ids, binding);
 
     erasedTargetNames.add(enclosingElement.toString());
+  }
+
+  private void parseResourceBool(Element element, Map<TypeElement, BindingClass> targetClassMap,
+      Set<String> erasedTargetNames) {
+    boolean hasError = false;
+    TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
+
+    // Verify that the target type is bool.
+    if (element.asType().getKind() != TypeKind.BOOLEAN) {
+      error(element, "@%s field type must be 'boolean'. (%s.%s)",
+          BindBool.class.getSimpleName(), enclosingElement.getQualifiedName(),
+          element.getSimpleName());
+      hasError = true;
+    }
+
+    // Verify common generated code restrictions.
+    hasError |= isInaccessibleViaGeneratedCode(BindBool.class, "fields", element);
+    hasError |= isBindingInWrongPackage(BindBool.class, element);
+
+    if (hasError) {
+      return;
+    }
+
+    // Assemble information on the field.
+    String name = element.getSimpleName().toString();
+    int id = element.getAnnotation(BindBool.class).value();
+
+    BindingClass bindingClass = getOrCreateTargetClass(targetClassMap, enclosingElement);
+    FieldResourceBinding binding = new FieldResourceBinding(id, name, "getBoolean");
+    bindingClass.addResource(binding);
+
+    erasedTargetNames.add(enclosingElement.toString());
+  }
+
+  private void parseResourceColor(Element element, Map<TypeElement, BindingClass> targetClassMap,
+      Set<String> erasedTargetNames) {
+    boolean hasError = false;
+    TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
+
+    // Verify that the target type is int or ColorStateList.
+    boolean isColorStateList = false;
+    TypeMirror elementType = element.asType();
+    if (COLOR_STATE_LIST_TYPE.equals(elementType.toString())) {
+      isColorStateList = true;
+    } else if (elementType.getKind() != TypeKind.INT) {
+      error(element, "@%s field type must be 'int' or 'ColorStateList'. (%s.%s)",
+          BindColor.class.getSimpleName(), enclosingElement.getQualifiedName(),
+          element.getSimpleName());
+      hasError = true;
+    }
+
+    // Verify common generated code restrictions.
+    hasError |= isInaccessibleViaGeneratedCode(BindColor.class, "fields", element);
+    hasError |= isBindingInWrongPackage(BindColor.class, element);
+
+    if (hasError) {
+      return;
+    }
+
+    // Assemble information on the field.
+    String name = element.getSimpleName().toString();
+    int id = element.getAnnotation(BindColor.class).value();
+
+    BindingClass bindingClass = getOrCreateTargetClass(targetClassMap, enclosingElement);
+    FieldResourceBinding binding = new FieldResourceBinding(id, name,
+        isColorStateList ? "getColorStateList" : "getColor");
+    bindingClass.addResource(binding);
+
+    erasedTargetNames.add(enclosingElement.toString());
+  }
+
+  private void parseResourceDimen(Element element, Map<TypeElement, BindingClass> targetClassMap,
+      Set<String> erasedTargetNames) {
+    boolean hasError = false;
+    TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
+
+    // Verify that the target type is int or ColorStateList.
+    boolean isInt = false;
+    TypeMirror elementType = element.asType();
+    if (elementType.getKind() == TypeKind.INT) {
+      isInt = true;
+    } else if (elementType.getKind() != TypeKind.FLOAT) {
+      error(element, "@%s field type must be 'int' or 'float'. (%s.%s)",
+          BindDimen.class.getSimpleName(), enclosingElement.getQualifiedName(),
+          element.getSimpleName());
+      hasError = true;
+    }
+
+    // Verify common generated code restrictions.
+    hasError |= isInaccessibleViaGeneratedCode(BindDimen.class, "fields", element);
+    hasError |= isBindingInWrongPackage(BindDimen.class, element);
+
+    if (hasError) {
+      return;
+    }
+
+    // Assemble information on the field.
+    String name = element.getSimpleName().toString();
+    int id = element.getAnnotation(BindDimen.class).value();
+
+    BindingClass bindingClass = getOrCreateTargetClass(targetClassMap, enclosingElement);
+    FieldResourceBinding binding = new FieldResourceBinding(id, name,
+        isInt ? "getDimensionPixelSize" : "getDimension");
+    bindingClass.addResource(binding);
+
+    erasedTargetNames.add(enclosingElement.toString());
+  }
+
+  private void parseResourceDrawable(Element element, Map<TypeElement, BindingClass> targetClassMap,
+      Set<String> erasedTargetNames) {
+    boolean hasError = false;
+    TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
+
+    // Verify that the target type is Drawable.
+    if (!DRAWABLE_TYPE.equals(element.asType().toString())) {
+      error(element, "@%s field type must be 'Drawable'. (%s.%s)",
+          BindDrawable.class.getSimpleName(), enclosingElement.getQualifiedName(),
+          element.getSimpleName());
+      hasError = true;
+    }
+
+    // Verify common generated code restrictions.
+    hasError |= isInaccessibleViaGeneratedCode(BindDrawable.class, "fields", element);
+    hasError |= isBindingInWrongPackage(BindDrawable.class, element);
+
+    if (hasError) {
+      return;
+    }
+
+    // Assemble information on the field.
+    String name = element.getSimpleName().toString();
+    int id = element.getAnnotation(BindDrawable.class).value();
+
+    BindingClass bindingClass = getOrCreateTargetClass(targetClassMap, enclosingElement);
+    FieldResourceBinding binding = new FieldResourceBinding(id, name, "getDrawable");
+    bindingClass.addResource(binding);
+
+    erasedTargetNames.add(enclosingElement.toString());
+  }
+
+  private void parseResourceInt(Element element, Map<TypeElement, BindingClass> targetClassMap,
+      Set<String> erasedTargetNames) {
+    boolean hasError = false;
+    TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
+
+    // Verify that the target type is int.
+    if (element.asType().getKind() != TypeKind.INT) {
+      error(element, "@%s field type must be 'int'. (%s.%s)", BindInt.class.getSimpleName(),
+          enclosingElement.getQualifiedName(), element.getSimpleName());
+      hasError = true;
+    }
+
+    // Verify common generated code restrictions.
+    hasError |= isInaccessibleViaGeneratedCode(BindInt.class, "fields", element);
+    hasError |= isBindingInWrongPackage(BindInt.class, element);
+
+    if (hasError) {
+      return;
+    }
+
+    // Assemble information on the field.
+    String name = element.getSimpleName().toString();
+    int id = element.getAnnotation(BindInt.class).value();
+
+    BindingClass bindingClass = getOrCreateTargetClass(targetClassMap, enclosingElement);
+    FieldResourceBinding binding = new FieldResourceBinding(id, name, "getInteger");
+    bindingClass.addResource(binding);
+
+    erasedTargetNames.add(enclosingElement.toString());
+  }
+
+  private void parseResourceString(Element element, Map<TypeElement, BindingClass> targetClassMap,
+      Set<String> erasedTargetNames) {
+    boolean hasError = false;
+    TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
+
+    // Verify that the target type is String.
+    if (!"java.lang.String".equals(element.asType().toString())) {
+      error(element, "@%s field type must be 'String'. (%s.%s)",
+          BindString.class.getSimpleName(), enclosingElement.getQualifiedName(),
+          element.getSimpleName());
+      hasError = true;
+    }
+
+    // Verify common generated code restrictions.
+    hasError |= isInaccessibleViaGeneratedCode(BindString.class, "fields", element);
+    hasError |= isBindingInWrongPackage(BindString.class, element);
+
+    if (hasError) {
+      return;
+    }
+
+    // Assemble information on the field.
+    String name = element.getSimpleName().toString();
+    int id = element.getAnnotation(BindString.class).value();
+
+    BindingClass bindingClass = getOrCreateTargetClass(targetClassMap, enclosingElement);
+    FieldResourceBinding binding = new FieldResourceBinding(id, name, "getString");
+    bindingClass.addResource(binding);
+
+    erasedTargetNames.add(enclosingElement.toString());
+  }
+
+  /** Returns the first duplicate element inside an array, null if there are no duplicates. */
+  private static Integer findDuplicate(int[] array) {
+    Set<Integer> seenElements = new LinkedHashSet<Integer>();
+
+    for (int element : array) {
+      if (!seenElements.add(element)) {
+        return element;
+      }
+    }
+
+    return null;
   }
 
   /** Uses both {@link Types#erasure} and string manipulation to strip any generic types. */
@@ -317,7 +657,7 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
   }
 
   private void findAndParseListener(RoundEnvironment env,
-      Class<? extends Annotation> annotationClass, Map<TypeElement, ViewInjector> targetClassMap,
+      Class<? extends Annotation> annotationClass, Map<TypeElement, BindingClass> targetClassMap,
       Set<String> erasedTargetNames) {
     for (Element element : env.getElementsAnnotatedWith(annotationClass)) {
       try {
@@ -326,14 +666,14 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
         StringWriter stackTrace = new StringWriter();
         e.printStackTrace(new PrintWriter(stackTrace));
 
-        error(element, "Unable to generate view injector for @%s.\n\n%s",
+        error(element, "Unable to generate view binder for @%s.\n\n%s",
             annotationClass.getSimpleName(), stackTrace.toString());
       }
     }
   }
 
   private void parseListenerAnnotation(Class<? extends Annotation> annotationClass, Element element,
-      Map<TypeElement, ViewInjector> targetClassMap, Set<String> erasedTargetNames)
+      Map<TypeElement, BindingClass> targetClassMap, Set<String> erasedTargetNames)
       throws Exception {
     // This should be guarded by the annotation's @Target but it's worth a check for safe casting.
     if (!(element instanceof ExecutableElement) || element.getKind() != METHOD) {
@@ -344,7 +684,7 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
     ExecutableElement executableElement = (ExecutableElement) element;
     TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
 
-    // Assemble information on the injection point.
+    // Assemble information on the method.
     Annotation annotation = element.getAnnotation(annotationClass);
     Method annotationValue = annotationClass.getDeclaredMethod("value");
     if (annotationValue.getReturnType() != int[].class) {
@@ -354,19 +694,18 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
 
     int[] ids = (int[]) annotationValue.invoke(annotation);
     String name = executableElement.getSimpleName().toString();
-    boolean required = element.getAnnotation(Optional.class) == null;
+    boolean required = isRequiredBinding(element);
 
     // Verify that the method and its containing class are accessible via generated code.
-    boolean hasError = isValidForGeneratedCode(annotationClass, "methods", element);
+    boolean hasError = isInaccessibleViaGeneratedCode(annotationClass, "methods", element);
+    hasError |= isBindingInWrongPackage(annotationClass, element);
 
-    Set<Integer> seenIds = new LinkedHashSet<Integer>();
-    for (int id : ids) {
-      if (!seenIds.add(id)) {
-        error(element, "@%s annotation for method contains duplicate ID %d. (%s.%s)",
-            annotationClass.getSimpleName(), id, enclosingElement.getQualifiedName(),
-            element.getSimpleName());
-        hasError = true;
-      }
+    Integer duplicateId = findDuplicate(ids);
+    if (duplicateId != null) {
+      error(element, "@%s annotation for method contains duplicate ID %d. (%s.%s)",
+          annotationClass.getSimpleName(), duplicateId, enclosingElement.getQualifiedName(),
+          element.getSimpleName());
+      hasError = true;
     }
 
     ListenerClass listener = annotationClass.getAnnotation(ListenerClass.class);
@@ -374,6 +713,34 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
       throw new IllegalStateException(
           String.format("No @%s defined on @%s.", ListenerClass.class.getSimpleName(),
               annotationClass.getSimpleName()));
+    }
+
+    for (int id : ids) {
+      if (id == View.NO_ID) {
+        if (ids.length == 1) {
+          if (!required) {
+            error(element, "ID-free binding must not be annotated with @Nullable. (%s.%s)",
+                enclosingElement.getQualifiedName(), element.getSimpleName());
+            hasError = true;
+          }
+
+          // Verify target type is valid for a binding without an id.
+          String targetType = listener.targetType();
+          if (!isSubtypeOfType(enclosingElement.asType(), targetType)
+              && !isInterface(enclosingElement.asType())) {
+            error(element, "@%s annotation without an ID may only be used with an object of type "
+                    + "\"%s\" or an interface. (%s.%s)",
+                    annotationClass.getSimpleName(), targetType,
+                enclosingElement.getQualifiedName(), element.getSimpleName());
+            hasError = true;
+          }
+        } else {
+          error(element, "@%s annotation contains invalid ID %d. (%s.%s)",
+              annotationClass.getSimpleName(), id, enclosingElement.getQualifiedName(),
+              element.getSimpleName());
+          hasError = true;
+        }
+      }
     }
 
     ListenerMethod method;
@@ -444,7 +811,8 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
           if (methodParameterUsed.get(j)) {
             continue;
           }
-          if (isSubtypeOfType(methodParameterType, parameterTypes[j])) {
+          if (isSubtypeOfType(methodParameterType, parameterTypes[j])
+              || isInterface(methodParameterType)) {
             parameters[i] = new Parameter(j, methodParameterType.toString());
             methodParameterUsed.set(j);
             break;
@@ -489,25 +857,32 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
       }
     }
 
-    ListenerBinding binding = new ListenerBinding(name, Arrays.asList(parameters), required);
-    ViewInjector viewInjector = getOrCreateTargetClass(targetClassMap, enclosingElement);
+    MethodViewBinding binding = new MethodViewBinding(name, Arrays.asList(parameters), required);
+    BindingClass bindingClass = getOrCreateTargetClass(targetClassMap, enclosingElement);
     for (int id : ids) {
-      if (!viewInjector.addListener(id, listener, method, binding)) {
-        error(element, "Multiple @%s methods declared for ID %s in %s.",
-            annotationClass.getSimpleName(), id, enclosingElement.getQualifiedName());
+      if (!bindingClass.addMethod(id, listener, method, binding)) {
+        error(element, "Multiple listener methods with return value specified for ID %d. (%s.%s)",
+            id, enclosingElement.getQualifiedName(), element.getSimpleName());
         return;
       }
     }
 
-    // Add the type-erased version to the valid injection targets set.
+    // Add the type-erased version to the valid binding targets set.
     erasedTargetNames.add(enclosingElement.toString());
+  }
+
+  private boolean isInterface(TypeMirror typeMirror) {
+    if (!(typeMirror instanceof DeclaredType)) {
+      return false;
+    }
+    return ((DeclaredType) typeMirror).asElement().getKind() == INTERFACE;
   }
 
   private boolean isSubtypeOfType(TypeMirror typeMirror, String otherType) {
     if (otherType.equals(typeMirror.toString())) {
       return true;
     }
-    if (!(typeMirror instanceof DeclaredType)) {
+    if (typeMirror.getKind() != TypeKind.DECLARED) {
       return false;
     }
     DeclaredType declaredType = (DeclaredType) typeMirror;
@@ -543,18 +918,18 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
     return false;
   }
 
-  private ViewInjector getOrCreateTargetClass(Map<TypeElement, ViewInjector> targetClassMap,
+  private BindingClass getOrCreateTargetClass(Map<TypeElement, BindingClass> targetClassMap,
       TypeElement enclosingElement) {
-    ViewInjector viewInjector = targetClassMap.get(enclosingElement);
-    if (viewInjector == null) {
+    BindingClass bindingClass = targetClassMap.get(enclosingElement);
+    if (bindingClass == null) {
       String targetType = enclosingElement.getQualifiedName().toString();
       String classPackage = getPackageName(enclosingElement);
       String className = getClassName(enclosingElement, classPackage) + SUFFIX;
 
-      viewInjector = new ViewInjector(classPackage, className, targetType);
-      targetClassMap.put(enclosingElement, viewInjector);
+      bindingClass = new BindingClass(classPackage, className, targetType);
+      targetClassMap.put(enclosingElement, bindingClass);
     }
-    return viewInjector;
+    return bindingClass;
   }
 
   private static String getClassName(TypeElement type, String packageName) {
@@ -562,7 +937,7 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
     return type.getQualifiedName().toString().substring(packageLen).replace('.', '$');
   }
 
-  /** Finds the parent injector type in the supplied set, if any. */
+  /** Finds the parent binder type in the supplied set, if any. */
   private String findParentFqcn(TypeElement typeElement, Set<String> parents) {
     TypeMirror type;
     while (true) {
@@ -591,5 +966,19 @@ public final class ButterKnifeProcessor extends AbstractProcessor {
 
   private String getPackageName(TypeElement type) {
     return elementUtils.getPackageOf(type).getQualifiedName().toString();
+  }
+
+  private static boolean hasAnnotationWithName(Element element, String simpleName) {
+    for (AnnotationMirror mirror : element.getAnnotationMirrors()) {
+      String annotationName = mirror.getAnnotationType().asElement().getSimpleName().toString();
+      if (simpleName.equals(annotationName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean isRequiredBinding(Element element) {
+    return !hasAnnotationWithName(element, NULLABLE_ANNOTATION_NAME);
   }
 }

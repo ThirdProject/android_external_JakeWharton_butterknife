@@ -1,5 +1,6 @@
 package butterknife;
 
+import android.view.View;
 import butterknife.internal.ListenerClass;
 import butterknife.internal.ListenerMethod;
 import java.lang.annotation.Retention;
@@ -14,14 +15,13 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
  * specified.
  * <pre><code>
  * {@literal @}OnItemClick(R.id.example_list) void onItemClick(int position) {
- *   Toast.makeText(this, "Clicked position " + position + "!", LENGTH_SHORT).show();
+ *   Toast.makeText(this, "Clicked position " + position + "!", Toast.LENGTH_SHORT).show();
  * }
  * </code></pre>
  * Any number of parameters from {@link OnItemClickListener#onItemClick(android.widget.AdapterView,
  * android.view.View, int, long) onItemClick} may be used on the method.
  *
  * @see OnItemClickListener
- * @see Optional
  */
 @Target(METHOD)
 @Retention(CLASS)
@@ -41,5 +41,5 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
 )
 public @interface OnItemClick {
   /** View IDs to which the method will be bound. */
-  int[] value();
+  int[] value() default { View.NO_ID };
 }

@@ -2,15 +2,15 @@ package butterknife.internal;
 
 import org.junit.Test;
 
-import static butterknife.internal.ViewInjector.emitHumanDescription;
+import static butterknife.internal.BindingClass.emitHumanDescription;
 import static java.util.Arrays.asList;
 import static org.fest.assertions.api.Assertions.assertThat;
 
-public class ViewInjectorTest {
+public class ViewBindingClassTest {
   @Test public void humanDescriptionJoinWorks() {
-    Binding one = new TestBinding("one");
-    Binding two = new TestBinding("two");
-    Binding three = new TestBinding("three");
+    ViewBinding one = new TestViewBinding("one");
+    ViewBinding two = new TestViewBinding("two");
+    ViewBinding three = new TestViewBinding("three");
 
     StringBuilder builder1 = new StringBuilder();
     emitHumanDescription(builder1, asList(one));
@@ -25,10 +25,10 @@ public class ViewInjectorTest {
     assertThat(builder3.toString()).isEqualTo("one, two, and three");
   }
 
-  private static class TestBinding implements Binding {
+  private static class TestViewBinding implements ViewBinding {
     private final String description;
 
-    private TestBinding(String description) {
+    private TestViewBinding(String description) {
       this.description = description;
     }
 

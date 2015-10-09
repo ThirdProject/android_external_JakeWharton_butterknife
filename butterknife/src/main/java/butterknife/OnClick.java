@@ -1,5 +1,6 @@
 package butterknife;
 
+import android.view.View;
 import butterknife.internal.ListenerClass;
 import butterknife.internal.ListenerMethod;
 import java.lang.annotation.Retention;
@@ -13,7 +14,7 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
  * Bind a method to an {@link OnClickListener OnClickListener} on the view for each ID specified.
  * <pre><code>
  * {@literal @}OnClick(R.id.example) void onClick() {
- *   Toast.makeText(this, "Clicked!", LENGTH_SHORT).show();
+ *   Toast.makeText(this, "Clicked!", Toast.LENGTH_SHORT).show();
  * }
  * </code></pre>
  * Any number of parameters from
@@ -21,20 +22,19 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
  * method.
  *
  * @see OnClickListener
- * @see Optional
  */
 @Target(METHOD)
 @Retention(CLASS)
 @ListenerClass(
     targetType = "android.view.View",
     setter = "setOnClickListener",
-    type = "android.view.View.OnClickListener",
+    type = "butterknife.internal.DebouncingOnClickListener",
     method = @ListenerMethod(
-        name = "onClick",
+        name = "doClick",
         parameters = "android.view.View"
     )
 )
 public @interface OnClick {
   /** View IDs to which the method will be bound. */
-  int[] value();
+  int[] value() default { View.NO_ID };
 }

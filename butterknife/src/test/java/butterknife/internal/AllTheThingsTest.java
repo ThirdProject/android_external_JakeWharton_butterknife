@@ -6,8 +6,7 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.CompoundButton;
 import android.widget.TextView;
-import butterknife.InjectView;
-import butterknife.InjectViews;
+import butterknife.Bind;
 import butterknife.OnCheckedChanged;
 import butterknife.OnClick;
 import butterknife.OnEditorAction;
@@ -18,7 +17,6 @@ import butterknife.OnItemSelected;
 import butterknife.OnLongClick;
 import butterknife.OnPageChange;
 import butterknife.OnTextChanged;
-import butterknife.Optional;
 import com.google.common.io.Files;
 import com.google.testing.compile.JavaFileObjects;
 import java.io.File;
@@ -27,9 +25,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.Test;
 
-import static butterknife.internal.ProcessorTestUtilities.butterknifeProcessors;
+import static com.google.common.truth.Truth.ASSERT;
 import static com.google.testing.compile.JavaSourceSubjectFactory.javaSource;
-import static org.truth0.Truth.ASSERT;
 
 @SuppressWarnings("UnusedDeclaration")
 public class AllTheThingsTest {
@@ -39,31 +36,33 @@ public class AllTheThingsTest {
 
     ASSERT.about(javaSource())
         .that(JavaFileObjects.forSourceString("butterknife.internal.AllTheThingsTest", content))
-        .processedWith(butterknifeProcessors())
+        .processedWith(new ButterKnifeProcessor())
         .compilesWithoutError();
   }
 
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  @InjectView(10) View injectView;
-  @Optional @InjectView(20) View optinalInjectView;
-
-  @InjectView(30) TextView injectTextView;
-  @Optional @InjectView(40) TextView optinalInjectTextView;
+  @interface Nullable {}
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
-  @InjectViews(50) List<View> injectViewsListOne;
-  @InjectViews({ 60, 70 }) List<View> injectViewsListMultiple;
+  @Bind(10) View findView;
+  @Nullable @Bind(20) View optinalBind;
 
-  @InjectViews(80) List<TextView> injectTextViewsListOne;
-  @InjectViews({ 90, 100 }) List<TextView> injectTextViewsListMultiple;
+  @Bind(30) TextView findTextView;
+  @Nullable @Bind(40) TextView optinalFIndTextView;
 
-  @InjectViews(110) View[] injectViewsArrayOne;
-  @InjectViews({ 120, 130 }) View[] injectViewsArrayMultiple;
+  /////////////////////////////////////////////////////////////////////////////////////////////////
 
-  @InjectViews(140) TextView[] injectTextViewsArrayOne;
-  @InjectViews({ 150, 160 }) TextView[] injectTextViewsArrayMultiple;
+  @Bind(50) List<View> findViewsListOne;
+  @Bind({ 60, 70 }) List<View> findViewsListMultiple;
+
+  @Bind(80) List<TextView> findTextViewsListOne;
+  @Bind({ 90, 100 }) List<TextView> findTextViewsListMultiple;
+
+  @Bind(110) View[] findViewsArrayOne;
+  @Bind({ 120, 130 }) View[] findViewsArrayMultiple;
+
+  @Bind(140) TextView[] findTextViewsArrayOne;
+  @Bind({ 150, 160 }) TextView[] findTextViewsArrayMultiple;
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
 

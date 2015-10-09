@@ -1,6 +1,60 @@
 Change Log
 ==========
 
+Version 7.0.1 *(2015-06-30)*
+----------------------------
+
+ * Fix: Correct `ClassCastException` which occurred when `@Nullable` array bindings had missing views.
+
+
+Version 7.0.0 *(2015-06-27)*
+----------------------------
+
+ * `@Bind` replaces `@InjectView` and `@InjectViews`.
+ * `ButterKnife.bind` and `ButterKnife.unbind` replaces `ButterKnife.inject` and `ButterKnife.reset`, respectively.
+ * `@Optional` has been removed. Use `@Nullable` from the 'support-annotations' library, or any other annotation
+   named "Nullable".
+ * New: Resource binding annotations!
+   * `@BindBool` binds an `R.bool` ID to a `boolean` field.
+   * `@BindColor` binds an `R.color` ID to an `int` or `ColorStateList` field.
+   * `@BindDimen` binds an `R.dimen` ID to an `int` (for pixel size) or `float` (for exact value) field.
+   * `@BindDrawable` binds an `R.drawable` ID to a `Drawable` field.
+   * `@BindInt` binds an `R.int` ID to an `int` field.
+   * `@BindString` binds an `R.string` ID to a `String` field.
+ * Fix: Missing views will be filtered out from list and array bindings.
+ * Note: If you are using Proguard, the generated class name has changed from being suffixed with `$$ViewInjector`
+   to `$$ViewBinder`.
+
+
+Version 6.1.0 *(2015-01-29)*
+----------------------------
+
+ * New: Support for injecting interface types everywhere that views were previously supported (e.g., `Checkable`).
+ * Eliminate reflection-based method invocation for injection and resetting. This makes performance slightly faster
+   (although if you are worried about the performance of Butter Knife you have other problems). The only reflection
+   in the library is a single `Class.forName` lookup for each type.
+
+
+Version 6.0.0 *(2014-10-27)*
+----------------------------
+
+ * New: Listeners can bind to the root view being injected by omitting a view ID on the annotation.
+ * New: Exceptions thrown from missing views now include the human-readable ID name (e.g., 'button1').
+ * Specifying multiple fields binding to the same ID is now considered an error.
+ * `findById` overload for view lookup on `Dialog` instances.
+ * Experimental: Click listeners are now globally debounced per frame. This means that only a single click
+   will be processed per frame preventing race conditions due to queued input events.
+ * Experimental: Multiple methods can bind to the same listener provided that listener's callback method
+   does not require a return value.
+
+
+Version 5.1.2 *(2014-08-01)*
+----------------------------
+
+ * Report an error if the annotations are on a class inside the `android.*` or `java.*`
+   package. Since we ignore these packages in the runtime, injection would never work.
+
+
 Version 5.1.1 *(2014-06-19)*
 ----------------------------
 

@@ -6,7 +6,7 @@
   <parent>
     <groupId>com.jakewharton</groupId>
     <artifactId>butterknife-parent</artifactId>
-    <version>5.1.2-SNAPSHOT</version>
+    <version>7.0.1</version>
   </parent>
 
   <artifactId>butterknife-sample</artifactId>
@@ -51,7 +51,7 @@
   <build>
     <plugins>
       <plugin>
-        <groupId>com.jayway.maven.plugins.android.generation2</groupId>
+        <groupId>com.simpligility.maven.plugins</groupId>
         <artifactId>android-maven-plugin</artifactId>
         <extensions>true</extensions>
       </plugin>

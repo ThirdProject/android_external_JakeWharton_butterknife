@@ -11,11 +11,11 @@
 
   <groupId>com.jakewharton</groupId>
   <artifactId>butterknife-parent</artifactId>
-  <version>5.1.2-SNAPSHOT</version>
+  <version>7.0.1</version>
   <packaging>pom</packaging>
 
   <name>Butter Knife (Parent)</name>
-  <description>View "injection" for Android.</description>
+  <description>Field and method binding for Android views.</description>
   <url>http://github.com/JakeWharton/butterknife/</url>
   <inceptionYear>2013</inceptionYear>
 
@@ -34,14 +34,14 @@
     <junit.version>4.10</junit.version>
     <robolectric.version>2.2</robolectric.version>
     <fest.android.version>1.0.7</fest.android.version>
-    <compile-test.version>0.5</compile-test.version>
+    <compile-test.version>0.6</compile-test.version>
   </properties>
 
   <scm>
     <url>http://github.com/JakeWharton/butterknife/</url>
     <connection>scm:git:git://github.com/JakeWharton/butterknife.git</connection>
     <developerConnection>scm:git:ssh://git@github.com/JakeWharton/butterknife.git</developerConnection>
-    <tag>HEAD</tag>
+    <tag>butterknife-parent-7.0.1</tag>
   </scm>
 
   <issueManagement>
@@ -136,9 +136,9 @@
     <pluginManagement>
       <plugins>
         <plugin>
-          <groupId>com.jayway.maven.plugins.android.generation2</groupId>
+          <groupId>com.simpligility.maven.plugins</groupId>
           <artifactId>android-maven-plugin</artifactId>
-          <version>3.8.0</version>
+          <version>4.1.0</version>
           <configuration>
             <sdk>
               <platform>${android.platform}</platform>

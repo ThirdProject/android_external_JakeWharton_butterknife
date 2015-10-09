@@ -1,6 +1,7 @@
 package butterknife;
 
 import android.text.TextWatcher;
+import android.view.View;
 import butterknife.internal.ListenerClass;
 import butterknife.internal.ListenerMethod;
 import java.lang.annotation.Retention;
@@ -13,7 +14,7 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
  * Bind a method to an {@link TextWatcher TextWatcher} on the view for each ID specified.
  * <pre><code>
  * {@literal @}OnTextChanged(R.id.example) void onTextChanged(CharSequence text) {
- *   Toast.makeText(this, "Text changed: " + text, LENGTH_SHORT).show();
+ *   Toast.makeText(this, "Text changed: " + text, Toast.LENGTH_SHORT).show();
  * }
  * </code></pre>
  * Any number of parameters from {@link TextWatcher#onTextChanged(CharSequence, int, int, int)
@@ -22,13 +23,12 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
  * To bind to methods other than {@code onTextChanged}, specify a different {@code callback}.
  * <pre><code>
  * {@literal @}OnTextChanged(value = R.id.example, callback = BEFORE_TEXT_CHANGED)
- * void onBeforeTextChanged(CharSequence text {
- *   Toast.makeText(this, "Before text changed: " + text, LENGTH_SHORT).show();
+ * void onBeforeTextChanged(CharSequence text) {
+ *   Toast.makeText(this, "Before text changed: " + text, Toast.LENGTH_SHORT).show();
  * }
  * </code></pre>
  *
  * @see TextWatcher
- * @see Optional
  */
 @Target(METHOD)
 @Retention(CLASS)
@@ -40,7 +40,7 @@ import static java.lang.annotation.RetentionPolicy.CLASS;
 )
 public @interface OnTextChanged {
   /** View IDs to which the method will be bound. */
-  int[] value();
+  int[] value() default { View.NO_ID };
 
   /** Listener callback to which the method will be bound. */
   Callback callback() default Callback.TEXT_CHANGED;
